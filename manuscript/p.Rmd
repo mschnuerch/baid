@@ -1,0 +1,382 @@
+---
+title             : "Assessing Qualitative Individual Differences with Bayesian Hierarchical Latent-Mixture Models"
+shorttitle        : "Qualitative Individual Differences Models"
+
+author: 
+  - name: Martin Schnuerch
+    affiliation: "1"
+    corresponding: yes    # Define only one corresponding author
+    email: martin.schnuerch@uni-mannheim.de
+    address: School of Social Sciences, University of Mannheim, 68131 Mannheim, Germany
+  - name: Jeffrey N. Rouder
+    affiliation: "2"
+
+affiliation       :
+  - id: 1
+    institution: "University of Mannheim"
+  - id: 2
+    institution: "University of California, Irvine"
+
+authornote: |
+  Author Contributions: MS developed and implemented the model and Bayes factor calculations, wrote the R functions, conceptualized and conducted the simulations and empirical applications, and drafted and revised the manuscript. JNR developed and implemented the model and Bayes factor calculations, conceptualized the simulations and empirical applications, and drafted and revised the manuscript.
+  
+  This manuscript was written in R Markdown with the R package papaja (Aust \& Barth, 2020). The R Markdown file and R code to reproduce all simulations, analyses, figures, and tables is available at \url{https://github.com/mschnuerch/baid}. All analyzed datasets are publicly available and the links are provided in the text. \nocite{aust2020}
+  
+  Parts of this work were presented at the 65th Annual Meeting of the Psychonomic Society in New York, USA.
+  
+  MS was funded by the Deutsche Forschungsgemeinschaft (DFG, German Research Foundation) -- GRK 2277 -- Projektnummer 310365261, and is grateful to the Baden-Württemberg Foundation for the financial support of this research project through the Postdoctoral fellowship. JNR was supported by NSF 2126976 and by ONR N00014-23-1-2792.
+
+abstract          :  "How do individuals vary in psychological experiments? Understanding how and why an effect differs across individuals provides a cornerstone for the development of precise psychological theories. Particularly important is the distinction between qualitative and quantitative differences: Does the manipulation affect all people in the same way or do some people show no or even a reversed effect? To address these questions, we develop a Bayesian hierarchical latent-mixture model where trial-by-trial observations are modeled with a linear model and critical true effect parameters for individuals are modeled as a mixture of three latent classes of positive effects, negative effects, and null effects.  We use Bayesian inference, implemented via parameter-expanded Markov chain Monte Carlo integration, to derive Bayes factors for evaluating the number and types of latent classes, classify individuals, and regularize individual effect estimates based on class membership. We demonstrate the usefulness of the model through simulations and applications to extant data and show that the approach is computationally efficient, aligns well with the structure in data, and provides clear, interpretable insights about substantive hypotheses. Thus, it offers an attractive method for assessing qualitative individual differences in experimental psychology."
+
+  
+keywords          : "Individual Differences, Bayesian Hierarchical Models, Bayes factor, Latent Class Models, Hierarchical Latent-Mixture Models"
+
+bibliography      : ["zlab.bib", "bib2.bib"]
+figsintext        : no
+figurelist        : no
+tablelist         : no
+footnotelist      : no
+lineno            : no
+
+csl               : "apa.csl"
+documentclass     : "apa7"
+classoption       : "man"
+biblio-style      : "apa"
+header-includes:
+   - \usepackage{bm}
+   - \usepackage{pcl}
+   - \usepackage{amsmath}
+   - \usepackage{setspace}
+output: 
+  papaja::apa6_pdf:
+    citation_package: biblatex
+---
+
+```{r}
+knitr::opts_chunk$set(
+  echo = FALSE, 
+  message=FALSE, 
+  warning = FALSE)
+```  
+
+```{r}
+library(papaja)
+library(mvtnorm)
+library(MCMCpack)
+library(ggtern)
+library(lemon)
+library(tidyverse)
+library(msm)
+library(LaplacesDemon)
+library(furrr)
+source("reanalysis_thiele_helpers.R")
+source("help_functions.R")
+source("functions.R")
+source("plot_functions.R")
+```
+
+Suppose you have established a novel effect in your field of psychology. Congratulations!  Odds are that you established it by considering means.  For example, each of several people provided two scores, one in each of two conditions, and a $t$-test revealed a significant difference.  And after showing this effect for a few independent replications and perhaps in a few different setups, you have high confidence in it.  
+
+What is the next step?  Consider two possibilities.  One possibility is that your effect is universal in the sense that if you had each individual's *true* score in each condition, the difference would be in the same direction, say positive, for everyone.  The other is that your effect holds only for some people and perhaps even reverses for others.  Here are examples of each possibility:  As far as we know, every individual that can read displays a true Stroop effect where the color of incongruent items is named more slowly than that of congruent items.  The difference between people is merely one of degree.  And, in this case, the mean has the desirable property that it captures the direction of everyone's effect.  Conversely, consider an experiment where people throw a ball with their left and right hands, and where the distance the ball travels serves as the dependent measure.  Here, the effect is an overall right-handed advantage, but the direction of this effect is not universal.  Approximately 10% of the population are left-handed, and they may truly throw a ball further with their left hand.  The mean in this case misses this diversity; the individual differences are qualitative rather than quantitative [@rouder2021].
+
+How shall we assess the diversity of true effects across individuals?  If we had access to the true class membership of each individual, then answering the diversity question is as simple as checking whether all individuals are from the same class.  In the *classification* approach, one first uses the data to classify each individual as showing an effect, a null effect, or, perhaps, a negative effect, and then checks whether all individuals come from the same class.  One way of classifying individuals is with confidence intervals.  If the lower bound is positive, then the individual is classified as having a positive effect; if the upper bound is negative, then the individual is classified as having a negative effect; if the confidence interval straddles zero, then the individual is classified as having a null effect.  In this setup, the confidence level may be chosen to reflect desired error rates.  An example of classification using this approach comes from @Little.etal.2011, who use it to classify interactions across individuals as super-additive, sub-additive, or null.
+
+One drawback to the above approach is that the classification of any individual is independent of classification of other individuals.  This approach is suboptimal when individuals' data are noisy.  In these cases, it is advantageous to treat each individual's true score as a random effect arising from a population distribution.  Data from all individuals form a baseline, and this baseline should influence classification to the degree that data from any one individual are noisy.  This behavior is natural in hierarchical models [@bryk1992], and @houpt2017 provide a latent-mixture approach. In this approach, each individual has a true class membership that is distributed from a parent or population distribution.  Individuals' true effect estimates are regularized by this latent class structure providing for reduced error and better prediction.
+
+Even though \citeauthor{houpt2017}'s approach was a capital improvement over the naive confidence-interval approach, it had a notable drawback.  As first pointed out by @Haaf.Rouder.2017, the question of process diversity is a configural or global one.  They argued that there could be cases where one could be sure that there must be one or more people in a minority class without knowing who was in that class.  @schnuerch2021a provided an example of this case.  They explored the *truth effect*, which is the tendency to consider repeated materials as more trustworthy than novel materials.  @schnuerch2021a, using methods by @Haaf.Rouder.2017, concluded that there was a high probability that some people had positive effects while others did not without being able to identify who was in which class.
+
+The Haaf and Rouder approach is a hierarchical approach without explicit classes.  Here is an example: Consider an experiment with two conditions, say a Stroop task, where one condition is congruent and the other is incongruent.  Let $Y_{ijk}$ be the $k$th response time for the $i$th individual in the $j$th condition, $i=1,\ldots,I$, $j=1,2$, $K=1,\ldots,K_{ij}$:
+\begin{eqnarray}
+Y_{ijk}\mid \beta_i &\sim& \mbox{Normal}(\alpha_i+x_j\beta_i,\;\sigma^2),\\
+\beta_i &\sim& \mbox{Norma}(\nu,\delta^2). \nonumber
+\end{eqnarray}
+In the model, $\alpha_i$ is the true overall speed of the $i$th person, $x_j=-1/2,\;+1/2$ codes the condition, $\beta_i$ is the true condition effect for the $i$th person, and $\sigma^2$ is the variability for repeated trials.  The use of *true* here should be compared to *sample*.  Parameters $\alpha_i$ and $\beta_i$ are true in the sense that they are unperturbed by trial noise and serve as expected values in the limit of a great many trials per individual.  The focus is on $\beta_i$, and in the above specification, $\beta_i$ has support for positive and negative effects, that is, it supports qualitative differences.  To test for quantitative differences, @Haaf.Rouder.2017 imposed the constraint that $\beta_i>0$ for all individuals.  They then computed the Bayes factor for this constraint and used the Bayes factor as a global measure of support for qualitative versus quantitative individual differences.  Extensions, software, and guidance are provided in @Haaf.Rouder.2019 and @rouder2021. 
+
+The Haaf and Rouder approach is not a latent-mixture approach as the latent classes are not explicitly modeled.  There are a few negative consequences.  First, the constraint that everyone is in the same class is evaluated for the collection of specific individuals in the study.  It is not about the population, and generalization to the population is done informally outside of the model.  Second, regularization of individuals' parameters is to grand averages and does not reflect class membership.  In the \citeauthor{houpt2017} approach, where there are explicit latent classes, the regularization of individual effect estimates depends in part on class membership. As mentioned above, however, this latent class approach does not allow for an assessment of the global configuration of individual differences.
+
+In this paper, we combine the strengths of both of these approaches by developing hierarchical latent-mixture models [@bartlema2014].  The key advantages are (i) a global, configural assessment of qualitative-vs-quantitative individual differences that does not depend on classifying specific individuals, (ii) better generalization beyond the sample of individuals in the study, (iii) fine-grained regularization of individual effect estimates that reflects latent class membership, and (iv) explicit classification of individuals into classes with known uncertainty.
+
+# Model Development
+
+## Model Specification
+
+The first level of the latent class model (i.e., the data model) is the Haaf and Rouder linear model, \begin{equation}
+  Y_{ijk} \sim \mbox{Normal}(\alpha_{i}+x_j\beta_{i},\;\sigma^2),
+  \label{dataModel}
+\end{equation}
+where $\beta_i$, the true effect, is the focus of analysis.  The next step is modeling class structure and membership.  There are three classes: a person is in the *positive class* if $\beta_i>0$; they are in the *negative class* if $\beta_i<0$; they are in the *zero class* if $\beta_i=0$.  Figure \ref{fig:model} shows a schematic with distributions over the classes.  We use latent indicators to note class membership.  Let $\ell=1,2,3$ denote the positive, negative, and zero class, respectively, and let $z_{i\ell}=1$ if the $i$th individual is in the $\ell$th class and zero otherwise.  Let $\bfz_i=(z_{i1},z_{i2},z_{i3})$ be the sequence of indicators.  Because a person can only be in one class, $\bfz_i$ can be either $(1,0,0)$, $(0,1,0)$ or $(0,0,1)$ for the positive, negative, and zero classes, respectively.  How are true effects distributed conditional on class membership?  We specify truncated normal distributions with free means and variances to capture latent clustering:
+\[
+\beta_i | \bfz_i \sim 
+\left\{ \begin{array}{ll}
+\mbox{Normal}_+(\nu_1,\delta_1^2), & \bfz_i=(1,0,0),\\
+\mbox{Normal}_-(\nu_2,\delta_2^2), & \bfz_i = (0,1,0),\\
+\mbox{Normal}(0,0), & \bfz_i=(0,0,1), \\
+\end{array}
+\right.
+\]
+where Normal$_+$ is a normal distribution truncated below at 0 (positive support) and Normal$_-$ is a normal distribution truncated above at 0 (negative support).  Parameters $\nu_1$ and $\nu_2$ describe the population means of these truncated normal distributions; parameters $\delta_1^2$ and $\delta_2^2$ likewise describe population variances.  Specification is completed by placing a model on $\bfz_i$:
+\begin{equation} \label{zMod}
+\bfz_i\sim \mbox{Categorical}(\rho_1,\rho_2,\rho_3).
+\end{equation}
+The Categorical distribution is the extension of the Bernoulli to more than two outcomes.  Parameters $\rho_1$, $\rho_2$, $\rho_3$ are population probabilities of respective class memberships with $\sum_\ell \rho_{\ell}=1$.
+
+```{r model, echo=FALSE, warning=FALSE, message=FALSE, fig.cap="Schematic illustration of the hierarchical latent-mixture model", fig.width=4, fig.asp = .6}
+ggplot(data.frame(x=0), aes(x)) +
+  geom_vline(xintercept = 0, linetype = "dashed",
+             color = "grey", lwd = 1) +
+  stat_function(fun = ~ dtnorm(.x, 5, 1.5, lower = 0) * .6,
+                xlim = c(0, 12), lwd = 1.5,
+                n = 500, color = "darkgreen") +
+  stat_function(fun = ~ dtnorm(.x, -5, 1.5, upper = 0) * .2,
+                xlim = c(-12, 0), lwd = 1.5,
+                n = 500, color = "firebrick") +
+  geom_segment(aes(x = 0, xend = 0, y = 0, yend = .06),
+               lwd = 1.5, arrow = arrow(type = "closed",
+                                      length= unit(.2, "inches"),
+                                      angle = 15),
+               color = "dodgerblue4") +
+  scale_x_continuous(element_blank(),
+                     breaks = c(-12, 0, 12),
+                     labels = c("-", "0", "+")) +
+  labs(y = element_blank()) +
+  coord_capped_cart(bottom = "both") +
+  theme_classic() +
+  theme(
+    axis.line.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.length.x = unit(.3, "cm"),
+    axis.ticks.x = element_line(linewidth = 1),
+    axis.text = element_text(size = 10,
+                             color = "black"),
+    axis.line.x = element_line(linewidth = 1)
+  )
+```
+
+
+## Parameter Expansion
+
+Bayesian analysis is natural in hierarchical-model setups.  Yet, in this case, the model has a peculiar property rendering it unsuitable for the usual analysis via Markov chain Monte Carlo (MCMC).  The usual approach is to  derive conditional posterior distributions as inputs to a Gibbs sampling algorithm.  Herein lies the problem for the model in its current form.  Let $p(\bfz_i|\beta_i,\ldots,\bfY)$ be the conditional posterior where the distribution is conditional jointly on $\beta_i$, all other parameters, and the data.  Once $\beta_i$ is known, however, $\bfz_i$ is determined and there is no probability.  Because of this lack of stochasticity, the resulting chain is *nonergodic*, and it absorbs at a state that is not the marginal distributions [see @Tierney.1994 for the conditions under which MCMC chains converge to marginal posterior distributions].  
+
+To solve this problem, we use a parameter expansion approach [@Liu.Wu.1999;@Tanner.1998;@Ghosh.Dunson.2009].  Suppose for each person, there are three effects, one for each class even though only one is realized.  Let $\theta_{i\ell}$ be the hypothetical effect as if the person was in the $\ell$th class.  Then, $\beta_i$, the true effect, is selected among these three hypothetical true effects based on the latent class indicator $\bfz_i$:
+\begin{equation} \label{betaMod}
+\beta_i = \prod_{\ell=1}^3 \theta_{i\ell}^{z_{i\ell}}.
+\end{equation}
+The parameter $\theta_{i1}$ is the $i$th individual's effect conditional on belonging to the positive class, and consequently, $\theta_{i1}>0$.  This parameter value is conditional---if the individual belongs to this class then this would be their effect.  The parameter $\theta_{i2}$ is the individual effect conditional on belonging to the negative class, hence $\theta_{i2}<0$; parameter $\theta_{i3}$ is conditional on the zero class, hence $\theta_{i3}=0$.
+
+We can now place models on the positive and negative class effects:
+\begin{subequations} \label{thetaMod}
+\begin{align}
+\theta_{i1} & \sim\mbox{Normal}_+(\nu_1,\delta_1^2),\\
+\theta_{i2} & \sim\mbox{Normal}_-(\nu_2,\delta_2^2).
+\end{align}
+\end{subequations}
+The model on class membership is the same, $\bfz_i\sim\mbox{Categorical}(\bfrho)$ where $\bfrho=(\rho_1,\rho_2,\rho_3)$.
+
+## Prior specification
+
+The model is conveniently analyzed in the Bayesian framework and priors are needed for parameters.  The goal is to provide prior specifications that (a) do not unduly affect the conclusions when reasonable settings are used, and (b) are computationally convenient.  Here, we provide the specification for critical model parameters. Prior specifications for the remaining parameters are given in Appendix \ref{sec:priorAppendix}, and in the Discussion, we analyze how changes in prior specification affect conclusions (Section *Prior Sensitivity*).
+
+Parameters $\alpha_i$ and $\sigma^2$ serve to locate and scale the observations and may be set broadly without concern.  More critical are the choices of population parameters $\nu_1$, $\nu_2$, $\delta^2_1$, and $\delta^2_2$ as these define the classes.   The following are broad, flexible forms that are computationally convenient:
+\begin{subequations} \label{parMod}
+\begin{align}
+\nu_1 &\sim \mbox{Normal}_+(a_1,b^2_1),\\
+\nu_2 &\sim \mbox{Normal}_-(a_2,b^2_2),\\
+\delta^2_1 &\sim \mbox{Inv-$\chi^2_1$}(r_1^2),\\
+\delta^2_2 &\sim \mbox{Inv-$\chi^2_1$}(r_2^2),
+\end{align}
+\end{subequations}
+where $\mbox{Inv-}\chi_1^2(r^2)$ denotes the scaled Inverse-$\chi^2$ distribution with one degree of freedom and scale parameter $r^2$. Prior settings $a_1$, $a_2$, $b_1$, $b_2$, $r_1$, and $r_2$ must be provided before analysis.  These values should reflect reasonable expectations.  We use truncated normal distributions in the prior specification of $\nu_1$ and $\nu_2$ to avoid the awkward case where these population parameters are opposite in sign from all individual-level parameters.  
+
+The final specification is the prior for $\bfrho$, the population-level class probabilities.  A Dirichlet distribution is flexible and convenient:
+\begin{equation} \label{rhoMod}
+\bfrho \sim \mbox{Dirichlet}(q_1,q_2,q_3),
+\end{equation}
+where $q_1$ through $q_3$ serve as prior settings of intensity for each category.  It is natural to set $q_1=q_2=q_3=q$ to show no favor toward any category, and to set $q$ fairly low to be *a priori* flexible. Figure \ref{fig:dirichlet} shows the joint prior on $\bfrho$ along with the corresponding marginal priors on $\rho_1$, $\rho_2$, and $\rho_3$, respectively, for select values of $q$. The Jeffreys prior in this setting is $q=1/3$ (first column), and we use this value throughout though other settings are convenient as well.
+
+
+```{r dirichlet, echo=FALSE, warning=FALSE, message=FALSE, fig.cap="Illustration of joint (upper row) and marginal (lower row) priors on population-level class probabilities for $\\bfrho \\sim \\mbox{Dirichlet}(q_1,q_2,q_3)$ with $q_1=q_2=q_3=q$."}
+
+# Create a grid of points for ternary plot
+p1 <- seq(.025, .975, by = .005)
+p2 <- seq(.025, .975, by = .005)
+p3 <- seq(.025, .975, by = .005)
+grid <- expand.grid(p1 = p1, p2 = p2, p3 = p3)
+grid <- grid[grid$p1 + grid$p2 + grid$p3 == 1, ] # Ensure p1 + p2 + p3 = 1
+
+
+# PLOT A
+grid$density <- LaplacesDemon::ddirichlet(grid[,1:3], c(1, 1, 1) / (3))
+pa = plot_ternary(grid) + 
+  ggtitle(expression(paste(italic(q), " = 1/3"))) +
+  theme(plot.title = element_text(hjust = .5))
+
+# PLOT B
+grid$density <- LaplacesDemon::ddirichlet(grid[,1:3], c(1, 1, 1) / (1))
+pb = plot_ternary(grid) + 
+  ggtitle(expression(paste(italic(q), " = 1"))) +
+  theme(plot.title = element_text(hjust = .5))
+
+# PLOT C
+grid$density <- LaplacesDemon::ddirichlet(grid[,1:3], c(1, 1, 1) / (1/3))
+pc = plot_ternary(grid) + 
+  ggtitle(expression(paste(italic(q), " = 3"))) +
+  theme(plot.title = element_text(hjust = .5))
+
+# PLOT D
+pd = plot_marginal(c(1, 1, 1) / 3) +
+  theme(plot.margin = unit(c(1, .75, 1, 0), "cm"))
+
+# PLOT E
+pe = plot_marginal(c(1, 1, 1)) +
+  theme(plot.margin = unit(c(1, .75, 1, 0), "cm"))
+
+# PLOT F
+pf = plot_marginal(c(1, 1, 1) / (1 / 3)) +
+  theme(plot.margin = unit(c(1, .75, 1, 0), "cm"))
+
+ga <- ggplotGrob(pa)
+gb <- ggplotGrob(pb)
+gc <- ggplotGrob(pc)
+
+ppd <- arrangeGrob(
+  pd, left = grid::textGrob("Marginal", rot = 90, vjust = 0)
+)
+
+r1 <- cowplot::plot_grid(ga, gb, gc, nrow = 1)
+r2 <- cowplot::plot_grid(pd, pe, pf, nrow = 1)
+
+rr1 <- arrangeGrob(
+  r1, left = grid::textGrob("\nJoint", rot = 90, vjust = 0)
+)
+
+rr2 <- arrangeGrob(
+  r2, left = grid::textGrob("\nMarginal", rot = 90, vjust = 0)
+)
+
+cowplot::plot_grid(rr1, rr2, nrow = 2)
+
+```
+
+## Extended Data Models
+
+The data model in Equation \ref{dataModel} is appropriate when effects are defined as the contrast between two conditions.  The data model may be extended to other designs.  Let $\bfY_{i}$ be a vector of $n_i$ observations for the $i$th participant.  The following linear model is placed on this vector:
+\begin{equation} 
+\bfY_i \sim \mbox{N}_n(\bfX_{0i}\bfalpha_i+\bfX_{1i}\beta_i,\;\sigma^2\bfI).\label{datMod2}
+\end{equation}
+Here, $\beta_i$ remains the effect of interest, and $\bfX_{1i}$ is a design vector that relates the observations for the $i$th individual to this effect.  The other parameters, essentially nuisance parameters, are $\bfalpha_i$, and these are related to observations through design matrix $\bfX_{0i}$.  We use this extension in an application where each individual provides data in a $2\times 2$ factorial design and the interaction effect is the target of inquiry.  In this application, the overall mean and main effects are nuisance parameters.
+
+## Model Analysis
+
+With parameter $\beta_i$ expanded as above, it is straightforward to analyze the model through MCMC sampling.  We derived conditional posterior distributions for a Gibbs sampler, and these are provided in Appendix \ref{sec:postAppendix}. To facilitate analysis in practical applications, we implemented the sampler in the statistical programming environment R [@rcoreteam2025] and developed a set of user-friendly functions. Interested readers may install these functions by downloading and running the R code from https://github.com/mschnuerch/baid.
+
+In the following sections, we derive calculations for Bayes-factor assessments of the latent class structure and for individual classification assessments. Subsequently, we discuss the performance of the model and the method of analysis with synthetic data and real-world examples. The source code for the simulations and analysis, including the use of above mentioned functions, is curated on GitHub and may be downloaded, along with the R Markdown file of this manuscript, from https://github.com/mschnuerch/baid.
+
+# Bayes Factors For Does-Everyone Assessments 
+
+When the goal is to sort individuals into qualitatively different classes, we may ask for each individual how likely it is that they belong to each class. This question is local to the individual, and it may be answered by assessing posterior distributions of the latent class indicators $\bfz_i$ and individual-level class probabilities. @Haaf.Rouder.2017, in contrast, asked how likely it is that all individuals have an effect in the same direction. Their question---coined *Does everyone?*---is global, and it requires assessment of the joint posterior probability that all individuals are in the same class.   Here, we develop Bayes factors for this assessment in the latent-mixture model. Bayes factors quantify the evidence for competing statistical models by comparing how well these models predict observed data [@Jeffreys.1961; @Kass.Raftery.1995; @Rouder.Morey.2019]. 
+
+Let $M_u$ be the model defined by Equations (\ref{dataModel}), (\ref{zMod}), (\ref{betaMod}), and (\ref{thetaMod}).  This model is *unconstrained* in that individuals may be assigned to any class depending on the data.  One constraint of interest, denoted $C_p$,  is that all individuals in this experiment are in the positive class:
+$$C_p\!:\quad \bfz_i = (1,0,0)\quad \forall i.$$
+Let $M_p$ denote the model with this constraint imposed.  As $M_p$ is encompassed by $M_u$, the Bayes factor between these models can be calculated from the Savage-Dickey density ratio [@Dickey.Lientz.1970;@Savage.1972],
+\[
+\mbox{BF}_{pu} = \dfrac{p(\bfY \mid M_p)}{p(\bfY \mid M_u)}=\dfrac{Pr(C_p \mid \bfY, M_u)}{Pr(C_p \mid M_u)}.
+\]
+
+To derive the computations, let $p_{i\ell}^* = Pr(z_{i\ell}=1)$ denote the probability that the $i$th individual is in the $\ell$th class, and note that $p_{i1}^*$ is the probability this individual is in the positive class.  The probability that all $I$ individuals are in the class given these probabilities is $\prod_i p_{i1}^*$.  Note that *a priori*, $p_{i1}^*=\rho_1$, hence the *prior* probability that all $I$ individuals are in the positive class is $\rho_1^I$.  Hence, the *a priori* conditional probability of the constraint is $Pr(C_p \mid \bfrho, M_u) = \rho_1^I$.  The next step is to marginalize across $\bfrho$.  Let $\cal{P}$ be the parameter space for $\bfrho$.  Then
+ \[
+  \begin{aligned}
+  Pr(C_p \mid M_u) &= \int_{\bfrho \in \cal{P}}
+  Pr(C_p \mid \bfrho,M_u)\times Pr(\bfrho|M_u)\;d\bfrho\\
+   &= \int_{\bfrho \in \cal{P}} \rho_1^I\ \rho_2^0\ \rho_3^0 \times \dfrac{1}{\mbox{B}(q_1,q_2,q_3)}\ \rho_1^{q_1 - 1}\ \rho_2^{q_2 - 1}\ \rho_3^{q_3 - 1} \; d\bfrho\\
+  &= \dfrac{1}{\mbox{B}(q_1,q_2,q_3)} \int_{\bfrho \in \cal{P}}\rho_1^{q_1 + I - 1}\ \rho_2^{q_2 - 1}\ \rho_3^{q_3 - 1} \; d\bfrho\\
+  &=\dfrac{\mbox{B}(q_1+I,q_2,q_3)}{\mbox{B}(q_1,q_2,q_3)},
+  \end{aligned}  
+\]
+where $B(.)$ is the multivariate beta function that normalizes the Dirichlet distribution on probabilities.
+
+The *posterior* probability $Pr(C_p|\bfY,M_u) = \prod_i (p_{i1}^*|\bfY)$ is estimated from conditionals using MCMC sampling. A simple strategy, advocated by @Klugkist.etal.2005 and used by @Haaf.Rouder.2017, is counting the relative frequency of iterations for which the constraint holds. This strategy, while easy to implement, can be inefficient, especially if the probability is very small [e.g., @sarafoglou2021]. A more efficient approach is *conditional marginal estimation* [@Chen.1994;@Morey.etal.2011a; @Gelfand.Smith.1990]: On each iteration, the conditional probability that the constraint $C_p$ holds is calculated, and the average over the iterations is the marginal posterior probability that the constraint holds [see @Morey.etal.2011a for discussion].
+
+There is an alternative constraint that we consider.  Constraint $C_p$ applies to the particular $I$ individuals in the design.  The Bayes factor is certainly inferential as the class membership is latent.  Yet, the inference cannot be generalized to a new sample of $I$ individuals from the population.  In the model, however, it is possible to compute the probability for a new sample.  Let $C_p^{'}$ be the constraint that a new sample of $I$ people are all in the positive class.  From the prior: $Pr(C_p^{'} \mid M_u)=Pr(C_p \mid M_u)$.  From the posterior: $Pr(C_p^{'} \mid \bfY,M_u) = (\rho_1 \mid \bfY)^I$.  The prior evaluation is the same as for $C_p$; the posterior evaluation is based on the posterior mixture probability $\bfrho \mid \bfY$ and marginalized in the chain as before.  In the following, we calculate Bayes factors for both $C_p$ (these $I$ individuals) and $C_p^{'}$ (any sample of $I$ individuals), where the latter is of much interest as it generalizes to new individuals.  Note that it is possible to compute Bayes factors for a new sample of individuals of any sample size rather than just the one used in the experiment. 
+
+Above, we derived the computations for the relevant constraint that everyone is in the positive class. The approach generalizes to any one-class constraint (i.e., "Everyone is in the null class" and "Everyone is in the negative class"). Moreover, due to the aggregation property of the Dirichlet distribution, it generalizes in a straightforward fashion to any two-class constraint (e.g., "Everyone is in the positive OR null class"). We include these constraints where appropriate in model comparison in the following applications. 
+
+# Individual Classification Assessments
+
+In the above development, we stressed the global or population configuration of classes.  Yet, because the model contains parameters for individuals, it is possible to compute posterior beliefs about any one individual.  As before, consider $p^*_{i1}=\Pr(\bfz_i=(1,0,0))$, $p^*_{i2}=\Pr(\bfz_i=(0,1,0))$, and $p^*_{i3}=\Pr(\bfz_i=(0,0,1))$, the probabilities of class membership, with the vector $\bfp^*_i=(p^*_{i1},p^*_{i2},p^*_{i3})$.  Although these probabilities are not part of model specification, they are computed in the MCMC chain conditional on the data and the other parameters (see Appendix \ref{sec:postAppendix}).  As such, it is possible to compute the posterior distribution $\bfp_i^* \mid \bfY$, which is a multivariate distribution on a triangle in the same form as those in Figure \ref{fig:dirichlet}.  Moreover, from this multivariate posterior distribution, marginal posterior distributions may be computed along with posterior means and credible intervals.  Figure \ref{fig:plotScenarios}C1 shows an example.  Here, the observed effect for each individual is plotted on the $x$-axis.  The $y$-axis shows the marginal posterior mean probability of a category for an individual as the thick colored lines.  For example, individuals with an observed effect of zero have an 80% probability of truly being in the null category and a 10% probability of being in the positive category and a 10% probability of being in the negative category.  There is uncertainty here as indicated by the shaded area which covers the 95% credible interval.  These posterior distributions on probability may be used to make classification decisions according to prescribed loss functions.  A simple classification approach for symmetric loss functions is to assign the individual to the category for which the posterior mean is highest.  
+
+# Synthetic Data Examples
+
+```{r child = 'synthetic_app.Rmd'}
+```
+
+# Real-Data Examples
+  
+```{r child = 'app.Rmd'}
+```
+
+# Discussion
+
+The exploration of individual differences has a longstanding tradition in psychological research. Investigating how and why individuals differ in psychological phenomena deepens our understanding of underlying mechanisms and forms a cornerstone for the development and refinement of psychological theories [@underwood1975]. Traditionally, research on individual differences has emphasized covariation of individual effects with other variables. However, there is growing recognition of the foundational role of distinguishing between quantitative and qualitative differences [e.g., @faulkenberry2022a; @Haaf.Rouder.2017; @rouder2021; @vogel2021; @schnuerch2021a].
+
+Previous work has provided a solid foundation for studying individual-differences structures. @houpt2017 introduced a Bayesian latent-mixture model to estimate individual class membership and regularize individual parameter estimates to this class structure. Although effective for individual classification, this approach does not provide a global assessment of the structure of individual differences, and, consequently, may overstate the degree of diversity across people.  To address this limitation, \textcite{Haaf.Rouder.2017, Haaf.Rouder.2019} developed a methodology based on Bayesian hierarchical models to test for quantitative versus qualitative differences.  Their approach, however, does not explicitly model latent classes and, therefore, does not provide convenient categorization of individuals nor regularization to a class structure.
+
+The presented model has the benefits of both previous approaches.  It supports the simultaneous classification of individuals into latent classes, following \citeauthor{houpt2017}, while also enabling a global assessment of the latent-class structure,  following Haaf and Rouder. And, unlike either of the two predecessors, the model enhances generalization beyond the specific sample at hand to new individuals and to new sample sizes.  To facilitate usage, we derived conditional posteriors for efficient Gibbs sampling and provide user-friendly R functions. Applications to both synthetic and empirical datasets demonstrate the model’s excellent performance in capturing nuanced structures of individual differences. In summary, by bridging the gap between individual classification and global model comparison, our approach offers a comprehensive tool for assessing the complexity of quantitative and qualitative individual differences in psychological phenomena.
+
+## Prior Sensitivity
+\label{sec:sensitivity}
+
+The Bayesian hierarchical latent-mixture approach, like any Bayesian analysis, requires the specification of prior distributions on model parameters. The dependence on prior settings has often been criticized as a potential threat to the validity of statistical inference [e.g., @Simmons.etal.2011]. This concern has led some researchers to advocate for modeling strategies that minimize the influence of prior settings [e.g., @Aitkin.1991; @Gelman.etal.2004; @Kruschke.2013; @Spiegelhalter.etal.2002]. 
+
+We disagree with this criticism. All statistical procedures require assumptions and decisions that affect inference -- for example, the choice of likelihood functions, error rates, or sample sizes. In Bayesian analysis, prior choices for model parameters encapsulate substantive knowledge and theoretical positions that shape the predictions models make about data [@Vanpaemel.2010]. The extent to which these prior choices affect our conclusions is the extent to which the statistical analysis may adjudicate between competing theoretical positions. Thus, differences in conclusions arising from different reasonable prior choices do not reflect a flaw in the statistical procedure but rather legitimate diversity in opinion [@Rouder.etal.2016a; @Rouder.etal.2016c], and they may indicate that the data, or the specified statistical models, lack the precision needed to resolve competing theoretical positions. Consequently, we argue that minimizing prior influence is neither necessary nor desirable, as it undermines the very strengths of Bayesian analysis.  The key of course is to know what it means to vary reasonably in prior opinion, and this reasonableness requires some substantive knowledge.
+
+To highlight how substantive considerations are used to study sensitivity to prior opinion, we provide a sensitivity analysis of the truth-effect data.  The key bit of substantive knowledge concerns the size of the truth effect, which is typically found to be Cohen's $d = 0.50$ [@dechene2010].  On a response scale recoded to range from $-1$ to $1$, this typical truth effect is about .25, and this value informed our previous prior settings.  We did not commit to effects being exactly .25, but this value set the scale on prior distributions.  After some thought and with some consultation with the extant literature, we believe that values of .10 and .50 provide a reasonable range of expectations on these scales, and values outside this range are unreasonably small or large [@schnuerch2021a].
+
+The critical prior settings reflecting these expectations are on $\nu_1$, $\nu_2$, $\delta_1^2$, and $\delta_2^2$. We repeated the analysis from Example II with two new priors reflecting the bounds of reasonably small and big effects (Table \ref{tab:sensitivity}). The first setting represents the expectation that individual true effects are clustered around zero with little variability across individuals. The second setting encodes that individual true effects are large and variable.
+
+\begin{table}
+  \caption{Prior Settings for the Sensitivity Analysis of Example II}
+  \label{tab:sensitivity}
+  \begin{tabular}{@{}cc@{}}         \toprule
+  Setting I & Setting 2 \\ \midrule
+  $\nu_1 \sim \mbox{Normal}_+(0,.10^2)$ & $\nu_1 \sim \mbox{Normal}_+(0.50,.10^2)$ \\
+  $\nu_2 \sim \mbox{Normal}_-(0,.10^2)$ & $\nu_2 \sim \mbox{Normal}_-(0.50,.10^2)$ \\
+  $\delta^2_1 \sim \mbox{Inv-$\chi^2$}_1(0.10^2)$ & $\delta^2_1 \sim \mbox{Inv-$\chi^2$}_1(0.50^2)$ \\
+  $\delta^2_2 \sim \mbox{Inv-$\chi^2$}_1(0.10^2)$ & $\delta^2_2 \sim \mbox{Inv-$\chi^2$}_1(0.50^2)$ \\ \bottomrule
+  \end{tabular}
+\end{table}
+
+The sensitivity of analysis to this five-fold change in prior settings that span the range of reasonableness is shown in Figure \ref{fig:plotSensitivity}.   The upper row shows posterior classification probabilities; the lower row shows log Bayes factors.  The exact classification probabilities and Bayes factors differ across prior settings, as they must. Importantly, however, the numerical differences do not change the substantive conclusions. Across all reasonable prior settings, the two-class model comprised of positive and null effects is preferred over the competing models.  Thus, our conclusions about individual differences in the truth-effect data by @nadarevic2011 are robust to reasonable prior variation.  We can now ask what would happen if this robustness is not found, that is, if there is a change in conclusions across reasonable variations in the prior.  In this case, we would simply conclude that the data do not have the resolution for definitive conclusions about class structure.  This lack of resolution could reflect an undersized sample or exceedingly noisy data, which, in turn, could inform future studies.
+
+```{r child = 'sensitivity.Rmd'}
+```
+
+
+## Limitations and Qualifications
+
+Perhaps the most obvious limitation here is that observations are assumed to be normally distributed (see Equation \ref{dataModel}).  The normal specification here is computationally convenient because with it, the parameter-expansion approach in Equations \ref{betaMod} and \ref{thetaMod} retains conjugacy.  Therefore, analysis can proceed through Gibbs steps without more costly Metropolis or hybrid steps.  Indeed, these simple Gibbs steps from the parameter expansion result in fast and efficient analysis.   Although the normal is a reasonable default in many cases and computationally convenient in this model, it is certainly inappropriate for dichotomous data and questionable for polytomous ones depending on the number of categories.  Moreover, it does not capture skew associated with positively-valued data nor does it provide theoretically interpretable parameters such as "accumulation rate" or "evidence boundary".   
+
+Perhaps the good news is that there is nothing about the development that precludes extensions to more rich or more appropriate data models.  General-purpose MCMC analysis packages such as Stan [@standevelopmentteam2024] and JAGS [@plummer2003] are highly effective for hierarchical models.  It remains unknown, however, whether the parameter expansion is feasible or useful in these contexts, and what might be the best sampling approach otherwise.  Exploring the feasibility of various data models and implementations comprises next steps going forward.
+
+The other limitation here is about generalization.  Previous models were quite limited in that generalizations to new individuals was informal.  For example, when @Haaf.Rouder.2017 concluded that "everyone Stroops," they did so by showing an exceedingly high probability that all $I$ participants in the analyzed datasets had a truly positive Stroop effect.  In this report, we provide a means of generalizing to a new sample of a fixed number of individuals from population-level parameters.  Nonetheless, two caveats need highlighting: 
+
+$(1)$ Although we can increase generality by increasing the fixed number of individuals as needed, we have not proved any theorems about what happens in the large-sample limit.  The main question is about the stability of class structures that are constrained.  For example, if a one-class structure is found for say $I=100$, $I=1000$, $I=10{,}000$, etc., how surely will it hold as $I \rightarrow \infty$.  We have explored the question numerically, and class probabilities seem fairly stable but, unfortunately, we lose machine precision rapidly with increasing $I$.  Missing here are firm asymptotic statements, and, as a result, generalization, while improved, remains largely informal.
+
+$(2)$ Statements like "Everyone does" highlight the difficulties in defining populations in generalization.  Here is some context:  In Europe, swans are white.  It was widely believed before the 18th century that the statement, "All swans are white," was true.  Yet, when Europeans visited Australia, they found black swans.  Hence, whether all swans are white seemed provisionally true for European swans, but not more widely.  This tale highlights that the population to which one generalizes is a construct subject to reference-class concerns [@Hajek.2007].  Hence, the usefulness of these generalizations, whether informal of formal, will always depend on properties of the sample of people.  Although these limitations in induction always hold, they seem more poignant with "all" and "none" statements than with statements about central tendencies because a single counterexample falsifies the statement.
+
+## Conclusion
+
+The Bayesian hierarchical latent-mixture model developed herein advances the study of qualitative individual differences by combining the strengths of prior methodological developments. By supporting both individual classification and global assessments of latent structures, it provides a powerful framework for understanding the complexity of individual variability. We hope that it will pave the way for more nuanced explorations of qualitative versus quantitative individual differences in psychological research.
+
+\newpage
+
+
+\printbibliography
+\def\printbibliography{}
+
+\newpage
+
+# (APPENDIX) Appendix {-}
+
+```{r child = 'appendix.Rmd'}
+```

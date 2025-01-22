@@ -1,0 +1,281 @@
+
+
+```{r exampleSettings}
+sim_settings = list(
+  N = 100,
+  J = 60,
+  tSigma = .5^2,
+  tMu = .1,
+  tEta = .25^2,
+  tNu1 = .25,
+  tDelta1 = .075^2,
+  tNu2 = -.25,
+  tDelta2 = .075^2,
+  tRho = c(.35, .3, .35)
+)
+
+prior_mix = list(
+  q = c(1, 1, 1)/3,
+  mu = c(0, 1),
+  nu1 = c(.05, .1^2),
+  nu2 = c(-.05, .1^2),
+  eta2 = .1,
+  delta2_1 = .1,
+  delta2_2= .1,
+  sigma2 = .3
+)
+
+n_samples <- 6000
+burnin <- 1000
+chains <- 4
+```
+
+## Settings
+
+To demonstrate the performance of the proposed hierarchical latent-mixture approach, we apply it to three hypothetical data sets.  Each data set is comprised of simulated data from 100 individuals performing 100 trials across two experimental conditions. The data were simulated based on the linear model given by Equation \ref{dataModel}, with $\alpha_i \sim \text{Normal}(0.10, 0.15^2)$ and $\sigma^2 = 0.50^2$. Figure \ref{fig:syntheticPopulations} shows the population distributions of $\bfbeta$ for the three scenarios. **Scenario I** is a three-class case.  Thirty-five percent of the population are in the positive class, 35% are in the negative class, and the remaining 30% are in the null class.  Individuals' effects in the positive class are distributed as $\beta_i \sim \mbox{Normal}_+(0.30, 0.10^2)$; those in the negative class are distributed as $\beta_i \sim \mbox{Normal}_-(-0.30, 0.10^2)$.  **Scenario II** is a two-class case---60% of participants are in the positive class and the the remaining 40% are in the null class, with effects in the positive class distributed as in Scenario I.  **Scenario III** is the "Everyone does" case where all individuals come from the positive class.
+
+
+
+```{r syntheticPopulations, echo=FALSE, fig.cap="The distribution of true effects, $\\beta_i$, for three different scenarios.", fig.width=4, fig.asp=1.75}
+p1 <- ggplot(data.frame(x=0), aes(x = x)) +
+  geom_vline(xintercept = 0, linetype = "dashed",
+             color = "grey", lwd = 1) +
+  stat_function(fun = ~ dtnorm(.x, .25, .075, lower = 0) * .35,
+                xlim = c(0, .5), lwd = 1.5,
+                n = 500, color = "darkgreen") +
+  stat_function(fun = ~ dtnorm(.x, -.25, .075, upper = 0) * .3,
+                xlim = c(-.5, 0), lwd = 1.5,
+                n = 500, color = "firebrick") +
+  geom_segment(aes(x = 0, xend = 0, y = 0, yend = 1.95),
+               lwd = 1.5, arrow = arrow(type = "closed",
+                                      length= unit(.2, "inches"),
+                                      angle = 15),
+               color = "dodgerblue4") +
+  annotate("text", 
+           label = expression(paste(rho, " =  (0.35, 0.3, 0.35)")), 
+           x = -.25, y = 2.5,
+           size = 3) +
+  labs(y = element_blank(), x = "True Individual Effects") +
+  coord_capped_cart(bottom = "both", ylim = c(0, 5.2)) +
+  my_theme +
+  theme(
+    text = element_text(size = 10, color = "black"),
+    axis.text = element_text(size = 10, color = "black"),
+    axis.ticks.length = unit(.2, "cm"),
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.line.y = element_blank()
+  )
+
+##
+
+p2 <- ggplot(data.frame(x=0), aes(x = x)) +
+  geom_vline(xintercept = 0, linetype = "dashed",
+             color = "grey", lwd = 1) +
+  stat_function(fun = ~ dtnorm(.x, .25, .075, lower = 0) * .6,
+                xlim = c(0, .5), lwd = 1.5,
+                n = 500, color = "darkgreen") +
+  geom_segment(aes(x = 0, xend = 0, y = 0, yend = 2.15),
+               lwd = 1.5, arrow = arrow(type = "closed",
+                                      length= unit(.2, "inches"),
+                                      angle = 15),
+               color = "dodgerblue4") +
+  annotate("text", label = expression(paste(rho, " =  (0.60, 0.00, 0.40)")), 
+           x = -.25, y = 2.5,
+           size = 3) +
+  labs(y = element_blank(), x = "True Individual Effects") +
+  coord_capped_cart(bottom = "both", xlim = c(-.5, .5), ylim = c(0, 5.2)) +
+  my_theme +
+  theme(
+    text = element_text(size = 10, color = "black"),
+    axis.text = element_text(size = 10, color = "black"),
+    axis.ticks.length = unit(.2, "cm"),
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.line.y = element_blank()
+  )
+
+##
+
+p3 <- ggplot(data.frame(x=0), aes(x = x)) +
+  geom_vline(xintercept = 0, linetype = "dashed",
+             color = "grey", lwd = 1) +
+  stat_function(fun = ~ dtnorm(.x, .25, .075, lower = 0),
+                xlim = c(0, .5), lwd = 1.5,
+                n = 500, color = "darkgreen") +
+  annotate("text", label = expression(paste(rho, " =  (1.00, 0.00, 0.00)")), 
+           x = -.25, y = 2.5,
+           size = 3) +
+  labs(y = element_blank(), x = "True Individual Effects") +
+  coord_capped_cart(bottom = "both", xlim = c(-.5, .5), ylim = c(0, 5.2)) +
+  my_theme +
+  theme(
+    text = element_text(size = 10, color = "black"),
+    axis.text = element_text(size = 10, color = "black"),
+    axis.ticks.length = unit(.2, "cm"),
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.line.y = element_blank()
+  )
+
+cowplot::plot_grid(p1, p2, p3, align = "hv", 
+                   nrow = 3, 
+                   labels = c("Scenario I", "Scenario II", "Scenario III"))
+
+```
+
+## Results
+
+We fit the hierarchical latent-mixture model to the three hypothetical data sets using MCMC with Gibbs sampling. For each data set, we ran four chains with $5{,}000$ posterior samples per chain, that is, $20{,}000$ posterior samples in total. Model convergence was assessed by visual inspection of the chains and calculation of the convergence statistic $\hat{R}$ [@vehtari2021] and effective sample sizes. To assess the global structure of individual effects underlying the data, we compared three models: the general model with three classes, a two-class model with a positive and a null class ("Some do, some don't"), and a model with a positive class only ("Everyone does"). For individual classification, we report posterior estimates of individual class probabilities.
+
+```{r scen1, cache=TRUE, message=FALSE, warning=FALSE}
+
+# Generate Data
+set.seed(1)
+data <- gen_data(sim_settings, true_model = "mixture_3")
+
+# Fit Naive Model 
+res_naive <- naid(data, ci = .80)
+
+
+# Fit 3-Class Mixture Model
+res_mix <- baid(data, "mixture_3", prior_mix, n_samples = n_samples,
+                burnin = burnin, chains = chains, check_convergence = T,
+                bayes_factors = T, h1 = list(c(1, 0, 0), c(1, 0, 1)), 
+                progress = FALSE)
+```
+
+```{r plotScenario1, echo=FALSE}
+
+p1 <- plot_naive(res_naive$theta, res_naive$ll, res_naive$ul, ylim = c(-1, 1)) +
+  ggtitle("A1")
+
+p2 <- plot_hlmm(res_naive, res_mix, ylim = c(-.75, .75)) +
+  ggtitle("B1")
+
+p3 <- plot_classification(res_naive, res_mix, legend_pos = c(.85, .35)) +
+  coord_capped_cart(xlim = c(-.6, .6), bottom = "both", left = "both") +
+  ggtitle("C1")
+
+p4 <- plot_bfs(res_mix, h1 = c("Positive", "Positive/Negative"), 
+               legend_pos = c(.75, .25)) +
+  scale_x_discrete(labels = c("+", expression(paste("+", union("0"))))) +
+  ggtitle("D1")
+
+
+q1 <- cowplot::plot_grid(p1, p2, p3, p4, align = "hv", ncol = 1)
+
+```
+
+#### Scenario I
+
+Results for Scenario I are displayed in the left column of Figure \ref{fig:plotScenarios}. Panel A1 shows the results from a naive approach where classification is based on 80% CIs around individual sample effects, and the color of the point denotes the classification. Based on this naive approach, we would correctly conclude that there are three classes comprised of positive, negative, and null effects. As estimates are based on each individual's data only, however, they are affected by sample noise and the variability between individuals is overstated.  Panel B1 shows posterior-mean estimates from the hierarchical latent-mixture model, and these are regularized. Note that individual estimates are shrunk toward class means. This regularization sharpens class membership. Panel C1 shows posterior individual class probabilities ($\bfp^*_{i}$); the points are posterior means and the shaded areas are posterior 95% credible intervals.   Certainty in the posterior mean varies considerably; it is greatest for extreme observations which are easily classified into positive and negative classes, and least for modestly negative or modestly positive values which may be null or signed.  Finally, Panel D displays model comparison results, that is, log Bayes factors. There is strong evidence for the three-class model versus the positive-class and the positive-and-null-class models, both with respect to the particular $I$ individuals in the hypothetical data set ("Sample") as well as any sample of the same size ("Population"). Thus, the approach correctly detects the three classes underlying the simulated data.
+
+
+
+```{r scen2, cache=TRUE, message=FALSE, warning=FALSE}
+
+# Generate Data
+set.seed(100)
+sim_settings$tRho <- c(.6, 0, .4)
+data <- gen_data(sim_settings, true_model = "mixture_3")
+
+# Fit Naive Model 
+res_naive2 <- naid(data, ci = .80)
+
+
+# Fit 3-Class Mixture Model
+res_mix2 <- baid(data, "mixture_3", prior_mix, n_samples = n_samples,
+                burnin = burnin, chains = chains, check_convergence = T,
+                bayes_factors = T, h1 = list(c(1, 0, 0), c(1, 0, 1)), 
+                progress = FALSE)
+```
+
+```{r plotScenario2, echo=FALSE}
+
+p1 <- plot_naive(res_naive2$theta, res_naive2$ll, res_naive2$ul, ylim = c(-1, 1)) +
+  ggtitle("A2")
+
+p2 <- plot_hlmm(res_naive2, res_mix2, ylim = c(-.75, .75)) +
+  ggtitle("B2")
+
+p3 <- plot_classification(res_naive2, res_mix2, legend_pos = c(.85, .35)) +
+  ggtitle("C2")
+
+p4 <- plot_bfs(res_mix2, h1 = c("Positive", "Positive/Negative"), 
+               legend_pos = c(.75, .25), ylim = c(-2.5, 2.5))  +
+  scale_x_discrete(labels = c("+", expression(paste("+", union("0"))))) +
+  ggtitle("D2")
+
+q2 <- cowplot::plot_grid(p1, p2, p3, p4, align = "hv", ncol = 1)
+
+```
+
+#### Scenario II
+
+Results from Scenario II are shown in Figure \ref{fig:plotScenarios}, middle column.  Classification from the naive approach mistakenly yields three classes of effects (Panel A2), although only one person is classified as negative.  The hierarchical latent-mixture approach, however, correctly identifies only null and positive classes (Panel B2-D2).  In Panel B2, individual effect estimates are shrunk toward either zero or the positive-class mean.  In Panel C2, probabilities dramatically favor null or positive class assignments.   In Panel D2, Bayes factor model comparisons clearly indicate evidence in favor of qualitative differences (i.e., against "Everyone does"), and the two-class model comprising only the positive and the null class is correctly preferred over the general model.
+
+
+
+```{r scen3, cache=TRUE, message=FALSE, warning=FALSE}
+
+# Generate Data
+set.seed(123)
+sim_settings$tRho <- c(1, 0, 0)
+data <- gen_data(sim_settings, true_model = "mixture_3")
+
+# Fit Naive Model 
+res_naive3 <- naid(data, ci = .80)
+
+
+# Fit 3-Class Mixture Model
+res_mix3 <- baid(data, "mixture_3", prior_mix, n_samples = n_samples,
+                burnin = burnin, chains = chains, check_convergence = T,
+                bayes_factors = T, h1 = list(c(1, 0, 0), c(1, 0, 1)), 
+                progress = FALSE)
+```
+
+```{r plotScenario3, echo=FALSE, fig.asp=.9}
+
+p1 <- plot_naive(res_naive3$theta, res_naive3$ll, res_naive3$ul, ylim = c(-1, 1),
+                 col_vals = c("white", "yellow")) +
+  ggtitle("A3")
+
+p2 <- plot_hlmm(res_naive3, res_mix3, ylim = c(-.75, .75)) +
+  ggtitle("B3")
+
+p3 <- plot_classification(res_naive3, res_mix3, legend_pos = c(.75, .35)) +
+  ggtitle("C3")
+
+p4 <- plot_bfs(res_mix3, h1 = c("Positive", "Positive/Null"), 
+               legend_pos = c(.75, .25), ylim = c(-5, 5))  +
+  scale_x_discrete(labels = c("+", expression(paste("+", union("0"))))) +
+  ggtitle("D3")
+
+q3 <- cowplot::plot_grid(p1, p2, p3, p4, align = "hv", ncol = 1)
+
+```
+
+#### Scenario III
+
+In Scenario III (Figure \ref{fig:plotScenarios}, right column), which is based on a one-class truth, we observe less variability in individual effects than in Scenarios I and II. Nevertheless, the naive classification approach overstates systematic variability and suggests qualitative differences, namely, positive and null effects (Panel A3). The model-based approach, in contrast, rightly detects the underlying structure and indicates strong evidence in favor of a simple one-class model (Panel D3). Again, the model-comparison result is reflected in individual classification and estimation results. Across the range of observed effects, individuals are assigned with high certainty to the positive class, in line with the global assessment that "everyone does" (Panel C3). Accordingly, individual effect estimates are shrunk toward the class mean with tight credible intervals (Panel B3).
+
+Overall, the model does an excellent job diagnosing the class structure and regularizing effect estimates to this structure.  With this performance as background, we analyze three extant real-world cases next to highlight the usefulness of the model in experimental contexts.
+
+```{r plotScenarios, echo=FALSE, fig.cap="Results for hypothetical data scenarios. A: Naive classification based on oberserved individual effects and 80\\% CIs. B: Posterior means (blue dots) and 95\\% Credible Intervals (blue shaded area) of individual effects compared to observed effects (grey line). C: Posterior means and 95\\% Credible Intervals of individual class probabilities. D: Model comparison results. Colored bricks at the bottom of Panels A and B denote true class membership (red = negative, white = null, yellow = positive).", fig.asp=1.2}
+
+qq1 <- arrangeGrob(
+  q1, top = grid::textGrob("\nScenario I")
+)
+
+qq2 <- arrangeGrob(
+  q2, top = grid::textGrob("\nScenario II")
+)
+
+qq3 <- arrangeGrob(
+  q3, top = grid::textGrob("\nScenario III")
+)
+
+cowplot::plot_grid(qq1, qq2, qq3, align = "hv", ncol = 3)
+
+```

@@ -1,0 +1,88 @@
+```{r SensitivityData, echo=F, warning=F, message=F, cache=T}
+
+# Settings
+n_samples = 26000
+burnin = 1000
+
+h1 <- list(
+  c(1, 0, 0), 
+  c(1, 1, 0), 
+  c(1, 0, 1)
+  )
+
+# Data
+dat <- data_te()
+data = .transform_data(dat)
+
+# Analyze
+res_naive <- naid(data, ci = .80)
+
+```
+
+
+```{r sensitivityAnalysis, cache=TRUE, message=FALSE, warning=FALSE}
+
+# Setting I
+prior_mix = list(
+  q = c(1, 1, 1)/3,
+  mu = c(0, 1),
+  nu1 = c(0, .1^2),
+  nu2 = c(0, .1^2),
+  eta2 = 2,
+  delta2_1 = .1,
+  delta2_2= .1,
+  sigma2 = .5
+)
+
+res_te1 <- baid(dat, "mixture_3", prior_mix, n_samples = n_samples,
+                   burnin = burnin, chains = 4, check_convergence = F,
+                   bayes_factors = T, h1 = h1, progress = F)
+
+# Setting II
+prior_mix = list(
+  q = c(1, 1, 1)/3,
+  mu = c(0, 1),
+  nu1 = c(0.5, .1^2),
+  nu2 = c(0.5, .1^2),
+  eta2 = 2,
+  delta2_1 = .5,
+  delta2_2= .5,
+  sigma2 = .5
+)
+
+res_te2 <- baid(dat, "mixture_3", prior_mix, n_samples = n_samples,
+                   burnin = burnin, chains = 4, check_convergence = F,
+                   bayes_factors = T, h1 = h1, progress = F)
+```
+
+```{r plotSensitivity, echo=FALSE, fig.cap="Sensitivity Analysis of Example II (The Truth Effect)"}
+
+p1 <- plot_classification(res_naive, res_te1, legend_pos = c(.75, .35)) +
+  coord_capped_cart(xlim = c(-.5, 1.5), bottom = "both", left = "both")
+
+p2 <- plot_classification(res_naive, res_te2, legend_pos = c(.75, .35)) +
+  coord_capped_cart(xlim = c(-.5, 1.5), bottom = "both", left = "both")
+
+p3 <- plot_bfs(res_te1, h1 = c("Positive", "Pos/Neg", "Positive/Null"), 
+               legend_pos = c(.8, .25))  +
+  scale_x_discrete(labels = c("+", 
+                              expression(paste("+ ", union(" -"))),
+                              expression(paste("+ ", union(" 0")))))
+
+p4 <- plot_bfs(res_te2, h1 = c("Positive", "Pos/Neg", "Positive/Null"), 
+               legend_pos = c(.8, .25))  +
+  scale_x_discrete(labels = c("+", 
+                              expression(paste("+ ", union(" -"))),
+                              expression(paste("+ ", union(" 0")))))
+
+left = arrangeGrob(
+  cowplot::plot_grid(p1, p3, align = "hv", ncol = 1), top = grid::textGrob("\nSetting I")
+)
+
+right = arrangeGrob(
+  cowplot::plot_grid(p2, p4, align = "hv", ncol = 1), top = grid::textGrob("\nSetting II")
+)
+
+cowplot::plot_grid(left, right, align = "hv", ncol = 2)
+
+```

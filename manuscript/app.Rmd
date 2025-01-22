@@ -1,0 +1,279 @@
+
+## Example I: Systems Factorial Technology
+
+```{r thielePre, echo=F, warning=F, message=F, cache=T}
+
+# Settings
+
+priors = list(
+  q = c(1, 1, 1) / 3,
+  mu = c(0, 1),
+  phiBeta = c(0, .5),
+  phiGamma = c(0, .5),
+  nu1 = c(0, .1),
+  nu2 = c(0, .1),
+  eta2alpha = .6,
+  eta2beta = .06,
+  eta2gamma = .06,
+  delta2_1 = .06,
+  delta2_2 = .06,
+  sigma2 = .6
+)
+
+n_samples = 30000
+burnin = 5000
+
+h1 <- list(
+  c(1, 0, 0), # coactive processing
+  c(0, 1, 0), # parallel processing
+  c(0, 0, 1),  # serial processing
+  c(1, 1, 0), # coactive + parallel processing
+  c(0, 1, 1), # parallel + serial processing
+  c(1, 0, 1)  # coactive + serial processing
+)
+
+# Data
+
+dat = data_1a()
+data = .transform_data_thiele(dat)
+
+# Analyze
+
+res_naive <- naid_thiele(dat, ci = .80)
+
+res_thiele <- baid_thiele(data, priors, n_samples, burnin,
+                          chains = 4, check_convergence = T,
+                          bayes_factors = T, h1 = h1, progress = T)
+
+```
+
+```{r plotThiele, echo=FALSE}
+p1 <- plot_naive(res_naive$theta, res_naive$ll, res_naive$ul,
+           col_vals = c("firebrick", "white", "yellow")) +
+  ggtitle("A1")
+
+p2 <- plot_hlmm(res_naive, res_thiele, ylim = c(-.15, .15)) +
+  scale_y_continuous(
+    limits = c(-.15, .15),
+    breaks = c(-.15, 0, .15)
+  ) +
+  ggtitle("B1")
+
+p3 <- plot_classification(res_naive, res_thiele, legend_pos = c(.6, .35)) +
+  ggtitle("C1")
+
+###
+
+p4 <- plot_bfs(res_thiele, h1 = c("C", "P", "S", "C+P", "P+S", "C+S"), 
+               legend_pos = c(.8, .25), ylim = c(-30, 10))  +
+  scale_x_discrete(labels = c("+", "-", "0", 
+                              expression(paste("+", union("-"))),
+                              expression(paste("-", union("0"))),
+                              expression(paste("+", union("0"))))) +
+  theme(
+    legend.background = element_rect(fill = 'transparent', color = NA), 
+    legend.box.background = element_rect(fill = 'transparent', color = NA)
+  ) +
+  ggtitle("D1")
+
+q1 <- cowplot::plot_grid(p1, p2, p3, p4, align = "hv", ncol = 1)
+```
+
+*Systems factorial technology* refers to a set of techniques for uncovering how multiple channels of information are processed [@houpt2014; @Townsend.Nozawa.1995].  The main primitives here are how the channels are combined.  One possibility is *serial processing* where the channels are processed one-at-a-time; another is *parallel processing* where processing co-occurs independently; a third is *coactivation* where processing occurs in parallel but the processing in one channel affects that of the other.  In the data we reanalyze, from  @thiele2017, participants had to process size information (one channel) and orientation information (another channel).   Whether information is processed in serial, parallel, of with coactivation refers to the architecture, and the critical question is how to use experiments to draw inferences about the architecture.  
+
+The critical contribution of systems factorial technology is that it provides a set of manipulations and contrasts that have a rigorous, formal interpretation [@Townsend.Wenger.2004].  The approch used by @thiele2017 is a three-by-three same-different design.  In their Experiment 1A, participants needed to decide if two objects, circles with a diameter chord, were the same or different.  These objects varied in size and in the orientation of the diameter chord.  There were three levels of size difference---either the two circles had the same size (denoted 0), varied slightly in size (denoted 1), or varied greatly in size (denoted 2).  The same was true for orientation.  In systems factorial technology, one focuses solely on the response times (RTs) in the four cells where both dimensions are different.  The key is the interaction---its sign is a direct indicator of processing architecture as follows.  Let $\mu_{ij}$ denote the RT for the $i$th level of size and $j$th level of orientation, and let $\beta=(\mu_{11}+\mu_{22})-(\mu_{12}+\mu_{21})$ be the interaction for the four cells where both dimensions differ.  @Townsend.Nozawa.1995 prove that this interaction is null if processing is serial; negative in value if processing is parallel; and  positive in value if processing is coactive.  The question then is what processing architecture characterizes each individual.  
+
+This question may be profitably analyzed with hierarchical models.  @thiele2017 developed a hierarchical normal model and assessed the probability each individual is on the same side of zero or null.  The model, however, used one rather than three classes.  @houpt2017 developed a three-class hierarchical model but gave no special credence to the "does everybody" configural question.  Here, we apply our new model to the @thiele2017 dataset from Experiment 1A.\footnote{The data are publicly available from \url{https://github.com/PerceptionCognitionLab/data1/tree/master/sysfactorial}.  R code for downloading and preprocessing these data can be found in the R scripts on https://github.com/mschnuerch/baid}  Let $Y_{ijkl}$ be the $l$th response time (in seconds) for the $i$th participant in the $j$th level of size and the $k$th level of orientation, with $i = 1, \ldots, I$, $j = 1,2$, $k = 1,2$, and $l = 1, \ldots, L_{ijk}$:
+$$Y_{ijkl} \sim \text{Normal}(\alpha_{0i} + \alpha_{1i} s(j) + \alpha_{2i} s(k)+\beta_i s(j) s(k), \sigma^2),$$
+where $s(m) = (-1)^m$ for $m = 1,2$. The parameters $\alpha_{0i}$, $\alpha_{1i}$, and $\alpha_{2i}$ denote the $i$th participant's mean reaction time, main effect of size, and main effect of orientation, respectively. The parameter of interest is the interaction effect $\beta_i$. Note that this model is equivalent to the extended data model given in Equation \ref{datMod2}, with nuisance parameters $\bfalpha = (\alpha_{0i}, \alpha_{1i}, \alpha_{2i})$. 
+
+\textcite[p. 46]{thiele2017} provide guidance for prior specification.  They specify that the scale on $\sigma$, the trial-by-trial variability, should be about 0.60 s, the scale on interaction effects should be about 0.09 s, and the the scale on individual variability in these interaction effects should be about 0.06 s.  We follow these specifications:
+\[ 
+\begin{aligned}
+\nu_1 &\sim \mbox{Normal}_+(0,0.10),\\
+\nu_2 &\sim \mbox{Normal}_-(0,0.10),\\
+\delta^2_1 &\sim \mbox{Inv-$\chi^2$}(0.06^2),\\
+\delta^2_2 &\sim \mbox{Inv-$\chi^2$}(0.06^2).
+\end{aligned}
+\]
+MCMC was run for four chains of $25{,}000$ iterations each. Convergence checks via visual inspections of the chains, the $\hat R$ statistic, and effective sample size statistics revealed that the model converged fast and the chains mixed well. 
+
+The results are shown in the left column of Figure \ref{fig:plotExamples}. Based on the naive classification approach, it would seem that there is indeed variability in processing architecture across individuals (Panel A1). However, model-based estimates indicate that this conclusion is likely due to sampling noise (Panel B1). All estimates are shrunk to zero, which is also reflected in individual classification probabilities (Panel C1) and model-comparison results (Panel D1). Across the range of observed effects, individuals are assigned to the zero class with high certainty and log Bayes factors indicate strong evidence in favor of a simple model comprising only the null class. These results confirm Thiele et al.'s conclusions that all individuals process the dimensions of size and orientation in a serial fashion.
+
+## Example II: The Truth Effect
+
+```{r nadarevicPre, echo=F, warning=F, message=F, cache=T}
+
+# Settings
+
+prior_mix = list(
+  q = c(1, 1, 1)/3,
+  mu = c(0, 1),
+  nu1 = c(.25, .1^2),
+  nu2 = c(-.25, .1^2),
+  eta2 = 2,
+  delta2_1 = .25,
+  delta2_2= .25,
+  sigma2 = .5
+)
+
+n_samples = 26000
+burnin = 1000
+
+h1 <- list(
+  c(1, 0, 0), 
+  c(1, 1, 0), 
+  c(1, 0, 1)
+  )
+
+# Data
+
+dat <- data_te()
+data = .transform_data(dat)
+
+# Analyze
+
+res_naive <- naid(data, ci = .80)
+
+res_te <- baid(dat, "mixture_3", prior_mix, n_samples = n_samples,
+                   burnin = burnin, chains = 4, check_convergence = T,
+                   bayes_factors = T, h1 = h1,
+                   progress = F)
+
+```
+
+```{r plotNadarevic, echo=FALSE}
+p1 <- plot_naive(res_naive$theta, res_naive$ll, res_naive$ul,
+                 col_vals = c("firebrick", "white", "yellow"),
+                 ylim = c(-1, 2), point_size = .5) +
+  ggtitle("A2")
+
+p2 <- plot_hlmm(res_naive, res_te, ylim = c(-.5, 1.5), point_size = .5) +
+  ggtitle("B2")
+
+p3 <- plot_classification(res_naive, res_te, legend_pos = c(.75, .35)) +
+  coord_capped_cart(xlim = c(-.5, 1.5), bottom = "both", left = "both") +
+  ggtitle("C2")
+
+p4 <- plot_bfs(res_te, h1 = c("Positive", "Pos/Neg", "Positive/Null"), 
+               legend_pos = c(.8, .25))  +
+  scale_x_discrete(labels = c("+", 
+                              expression(paste("+ ", union(" -"))),
+                              expression(paste("+ ", union(" 0"))))) +
+  ggtitle("D2")
+
+q2 <- cowplot::plot_grid(p1, p2, p3, p4, align = "hv", ncol = 1)
+```
+
+For the second example, we reanalyzed data by @nadarevic2011 on the truth effect.\footnote{The data are publicly available from \url{https://osf.io/3uaj7/}. R code for downloading and preprocessing these data can be found in the R scripts on https://github.com/mschnuerch/baid}  The truth effect refers to the phenomenon that repeated statements are viewed as more trustworthy or truthful than novel statements [@dechene2010]. @schnuerch2021a asked whether all people were susceptible to the truth effect by analyzing \citeauthor{nadarevic2011}'s data with the one-class models of @Haaf.Rouder.2017.  @schnuerch2021a found evidence for qualitative individual differences. This analysis, however, did not indicate the exact nature of qualitative differences, that is, whether some individuals showed negative effects, as these authors conjectured, or no effect.  Moreover, the analysis did not identify which individuals were in this minority class. 
+
+To address these limitations, we applied the hierarchical latent-mixture approach with the following specifications:  Let $Y_{ijk}$ be the $k$th truth rating of person $i$ in condition $j$ (repeated vs. new), $i = 1, \ldots, I$, $j = 1,2$, $k = 1, \ldots, K_{ij}$. Ratings were transformed to range from $-1$ (definitely false) to $1$ (definitely true) and were modeled with the data model in Equation \ref{dataModel}. Prior settings followed from Schnuerch et al.'s (\citeyear{schnuerch2021a}, p. 756) substantive arguments about the range of ratings in these experiments:
+\[
+\begin{aligned}
+\nu_1 &\sim \mbox{Normal}_+(0.25,0.10^2),\\
+\nu_2 &\sim \mbox{Normal}_-(-0.25,0.10^2),\\
+\delta^2_1 &\sim \mbox{Inv}-\chi^2(0.25^2),\\
+\delta^2_2 &\sim \mbox{Inv}-\chi^2(0.25^2).
+\end{aligned}
+\]
+MCMC was run for four chains of $25{,}000$ iterations each.  The chains mixed well as indicated by visual inspections of the chains, the $\hat R$ statistic, and effective sample size statistics.
+
+The results are shown in the middle column of Figure \ref{fig:plotExamples}. In contrast to the naive approach (Panel A2), the latent-mixture model suggests that qualitative individual differences in this truth-effect data set are driven by positive and null effects: Bayes factors indicate evidence for "Some do, some don't" over the general three-class model, as well as over "Everyone does" and "Some are positive, some are negative" (Panel D2). Accordingly, individuals are assigned to either the positive or the null class with high certainty (Panel C2),  resulting in considerable amounts of shrinkage to the mean of the positive class and zero (Panel B2). Thus, our reanalysis further qualifies the finding of qualitative differences as resulting from some individuals showing no effect at all while the majority displays the classical, positive truth effect. Furthermore, individual class probabilities now provide a means to identify who these individuals are. 
+
+
+## Example III: The Articulatory In-Out Effect
+
+```{r ingendahlPre, echo=F, warning=F, message=F, cache=T}
+
+# Settings
+
+prior_mix = list(
+  q = c(1, 1, 1)/3,
+  mu = c(0, 1),
+  nu1 = c(0, .1^2),
+  nu2 = c(0, .1^2),
+  eta2 = .1,
+  delta2_1 = .1,
+  delta2_2= .1,
+  sigma2 = .3
+)
+
+n_samples = 26000
+burnin = 1000
+
+h1 <- list(
+  c(1, 0, 0), 
+  c(1, 0, 1), 
+  c(0, 0, 1)
+  )
+
+# Data
+
+dat <- data_ioe()
+data = .transform_data(dat)
+
+# Analyze
+
+res_naive <- naid(data, ci = .80)
+
+res_ioe <- baid(dat, "mixture_3", prior_mix, n_samples = n_samples,
+                   burnin = burnin, chains = 4, check_convergence = T,
+                   bayes_factors = T, h1 = h1,
+                   progress = F)
+
+```
+
+```{r plotIngendahl, echo=FALSE}
+p1 <- plot_naive(res_naive$theta, res_naive$ll, res_naive$ul,
+                 ylim = c(-1, 1), point_size = .5) +
+  ggtitle("A3")
+
+p2 <- plot_hlmm(res_naive, res_ioe, ylim = c(-.5, .51), point_size = .5) +
+  ggtitle("B3")
+
+p3 <- plot_classification(res_naive, res_ioe, legend_pos = c(.85, .35)) +
+  coord_capped_cart(xlim = c(-.4, .6), bottom = "both", left = "both") +
+  ggtitle("C3")
+
+p4 <- plot_bfs(res_ioe, h1 = c("Positive", "Pos/Null", "Null"), 
+               legend_pos = c(.6, .25))  +
+  scale_x_discrete(labels = c("+", 
+                              expression(paste("+", union("0"))),
+                              "0")) +
+  ggtitle("D3")
+
+q3 <- cowplot::plot_grid(p1, p2, p3, p4, align = "hv", ncol = 1)
+```
+
+The articulatoy in-out effect refers to a preference phenomenon where one set of phonetic strings is judged as more pleasing than another.  Specifically, strings with inward-moving articulation trajectories (such as "BODIKA") are preferred over words with an outward-moving trajectory (e.g., "KODIBA"). Even though the effect has been replicated multiple times and shown to be robust on average [@ingendahl2022], how the effect differs systematically between individuals has received only little attention.
+
+We address this gap by analyzing preference data from @ingendahl2023 with the hierarchical latent-mixture model.\footnote{The data are publicly available from \url{https://osf.io/8qc5d/}. R code for downloading and preprocessing these data can be found in the R scripts on https://github.com/mschnuerch/baid} As before, we modeled ratings scaled from $-1$ to $1$ with the data model in Equation \ref{dataModel}.  To provide some context for prior specification, we consulted the extant literature and published data on the in-out effect \parencite[e.g.,][]{gerten2020, ingendahl2023, ingendahl2022a, ingendahl2022b, korner2022, topolinski2024}. From this overview, we learned that on a standardized rating scale from $-1$ to $1$, trial-by-trial variability is typically around $\sigma = 0.30$, and mean effects are about $1/3$ this value. We expect variability in true individual effects to be no greater than this, and we chose the prior setting on critical parameters accordingly:
+\[
+\begin{aligned}
+\nu_1 &\sim \mbox{Normal}_+(0,0.10^2),\\
+\nu_2 &\sim \mbox{Normal}_-(0,0.10^2),\\
+\delta^2_1 &\sim \mbox{Inv-$\chi^2$}(0.10^2),\\
+\delta^2_2 &\sim \mbox{Inv-$\chi^2$}(0.10^2).
+\end{aligned}
+\]
+MCMC was run for four chains of $25{,}000$ iterations each. As in the previous examples, convergence checks indicated that the model converged and the chains mixed well.
+
+Modeling results reveal a clear picture (Figure \ref{fig:plotExamples}, right column). There is strong evidence for qualitative individual differences (Panel D3), that is, not everyone shows a typical articulatory in-out effect. Importantly, the general model is preferred over all other specified models, reflecting the need for three qualitatively different classes. Accordingly, individual class probabilities and effect estimates indicate that most individuals have a null effect, while some show the typical effect and others show a reversed effect. Importantly, the sample mean over individuals, while positive, is not representative of most people.  Ignoring this fact may be a pitfall in less nuanced analyses.  This example provides a strong rationale for studying individual differences when establishing effects in psychological science.
+
+```{r plotExamples, echo=FALSE, fig.cap="Results for Real-Data Applications. A: Naive classification based on oberserved individual effects and 80\\% CIs. B: Posterior means (blue dots) and 95\\% Credible Intervals (blue shaded area) of individual effects compared to observed effects (grey line). C: Posterior means and 95\\% Credible Intervals of individual class probabilities. D: Model comparison results.", fig.asp=1.2}
+
+qq1 <- arrangeGrob(
+  q1, top = grid::textGrob("\nThiele et al. (2017)")
+)
+
+qq2 <- arrangeGrob(
+  q2, top = grid::textGrob("\nNadarevic & Rinnewitz (2011)")
+)
+
+qq3 <- arrangeGrob(
+  q3, top = grid::textGrob("\nIngendahl et al. (2023)")
+)
+
+cowplot::plot_grid(qq1, qq2, qq3, align = "hv", ncol = 3)
+
+```
