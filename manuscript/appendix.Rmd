@@ -12,45 +12,56 @@ To complete model specification, priors are needed on $\alpha_i$ and $\sigma^2$.
 \sigma^2 & \sim \mbox{Inv-$\chi^2_1$}(r_\sigma^2),
 \end{align}
 \end{subequations}
-where parameters $a_\mu$, $b_\mu$, $r_\eta$, and $r_\sigma$ must be set before analysis. Note that these parameters may be chosen without unduly affecting model comparison results for class-structure assessments.
+where parameters $a_\mu$, $b_\mu$, $r_\eta$, and $r_\sigma$ must be set before analysis. Prior parameters here serve to locate and scale observations.  They may be set so that the prior distributions are broad, and their values do not affect inference about class structure.
 
 # Posterior Distributions
 \label{sec:postAppendix}
 
 For the hierarchical latent-mixture model specified in Equations \ref{dataModel}, \ref{zMod}, \ref{betaMod}, \ref{thetaMod}, \ref{parMod}, \ref{rhoMod}, and \ref{parMod2}, the unnormalized joint posterior is given by
-\small
+%\small
 \begin{equation*}
-\begin{aligned}
-    &p(\boldsymbol \alpha, \boldsymbol \theta_1, \boldsymbol \theta_2, \mathbf z, \boldsymbol \rho, \nu_1, \delta_1^2, \nu_2, \delta_2^2, \mu, \eta^2, \sigma^2 \mid \mathbf Y)\\ 
-    &\propto \prod_{i=1}^I \prod_{\ell=1}^3 \left[ \exp \left( - \dfrac{\sum_j \sum_k (y_{ijk} - \alpha_i - x_j \theta_{\ell i})^2}{2 \sigma^2} \right) \right]^{z_{\ell i}} \times \exp \left(-  \dfrac{(\alpha_i - \mu)^2}{2 \eta^2} \right) \\
-& \times \exp \left( -\dfrac{(\theta_{1i} - \nu_1)^2}{2\delta^2_1} \right) \times
-\exp \left( -\dfrac{(\theta_{2i} - \nu_2)^2}{2\delta^2_2} \right) \times \left[ \rho_1^{z_{1i}} \rho_2^{z_{2i}} \rho_3^{z_{3i}} \right] \times
-\left[ \rho_1^{q_1 - 1} \rho_2^{q_2 - 1} \rho_3^{q_3 - 1} \right]\\
-& \times \exp \left( -\dfrac{(\nu_1 - a_1)^2}{2b_1^2} \right) \times 
-\left[ \left( \dfrac{1}{\delta_1^2} \right)^{3/2} \exp \left( - \dfrac{r_1^2}{2\delta_1^2} \right) \right] \times 
-\exp \left( -\dfrac{(\nu_2 - a_2)^2}{2b_2^2} \right) \times 
-\left[ \left( \dfrac{1}{\delta_2^2} \right)^{3/2} \exp \left( - \dfrac{r_2^2}{2\delta_2^2} \right) \right]\\
-& \times \exp \left(-  \dfrac{(\mu - a_m)^2}{2 b_m^2} \right) \times
-\left[ \left( \dfrac{1}{\eta^2} \right)^{3/2} \exp \left( - \dfrac{r_\eta^2}{2\eta^2} \right) \right] \times
-\left[ \left( \dfrac{1}{\sigma^2} \right)^{3/2} \exp \left( - \dfrac{r_\sigma^2}{2\sigma^2} \right) \right].
-\end{aligned}
+	\begin{aligned}
+		&p(\boldsymbol \alpha, \boldsymbol \theta_1, \boldsymbol \theta_2, \mathbf z, \boldsymbol \rho, \nu_1, \delta_1^2, \nu_2, \delta_2^2, \mu, \eta^2, \sigma^2 \mid \mathbf Y) \\ 
+		&\propto 
+		\prod_{i=1}^I \Bigg\{ 
+		\prod_{\ell=1}^3 
+		\exp \left( - \frac{\sum_j \sum_k (y_{ijk} - \alpha_i - x_j \theta_{\ell i})^2}{2 \sigma^2} \right)^{z_{\ell i}} 
+		\times \exp \left( -\frac{(\alpha_i - \mu)^2}{2 \eta^2} \right) \\[1em]
+		&\quad \times \exp \left( -\frac{(\theta_{1i} - \nu_1)^2}{2 \delta_1^2} \right) 
+		\times \exp \left( -\frac{(\theta_{2i} - \nu_2)^2}{2 \delta_2^2} \right) 
+		\times \rho_1^{z_{1i}} \rho_2^{z_{2i}} \rho_3^{z_{3i}} 
+		\Bigg\} \\[1em]
+		&\quad \times \rho_1^{q_1 - 1} \rho_2^{q_2 - 1} \rho_3^{q_3 - 1} 
+		\times \exp \left( - \frac{(\nu_1 - a_1)^2}{2 b_1^2} \right) 
+		\times \left( \frac{1}{\delta_1^2} \right)^{3/2} 
+		\exp \left( - \frac{r_1^2}{2 \delta_1^2} \right) \\[1em]
+		&\quad \times \exp \left( - \frac{(\nu_2 - a_2)^2}{2 b_2^2} \right) 
+		\times \left( \frac{1}{\delta_2^2} \right)^{3/2} 
+		\exp \left( - \frac{r_2^2}{2 \delta_2^2} \right) \\[1em]
+		&\quad \times \exp \left( - \frac{(\mu - a_m)^2}{2 b_m^2} \right) 
+		\times \left( \frac{1}{\eta^2} \right)^{3/2} 
+		\exp \left( - \frac{r_\eta^2}{2 \eta^2} \right) 
+		\times \left( \frac{1}{\sigma^2} \right)^{3/2} 
+		\exp \left( - \frac{r_\sigma^2}{2 \sigma^2} \right).
+	\end{aligned}
 \end{equation*}
 
-\normalsize
-From the joint posterior, derivation of full conditionals is straightforward: For each parameter, in a first step, all terms that do not depend on the parameter are removed. Then, the remaining terms constitute the kernel (i.e., the functional form without normalizing constants) of the conditional posterior distribution, and since all priors are conjugate, this distribution is known and its parameters follow from the kernel. Below, conditional posterior distributions are provided for all parameters (note that for simplicity, $\ldots$ is used for each parameter to denote that it is conditional on all other parameters):
+%\normalsize
+
+From the joint posterior, derivation of full conditionals is straightforward: For each parameter, all terms that do not depend on that parameter are removed. Then, the remaining terms constitute the kernel (i.e., the functional form without normalizing constants) of the conditional posterior distribution. Since all priors are conjugate, this distribution is known and its parameters follow from the kernel. Below, conditional posterior distributions are provided for all parameters (note that for simplicity, \(\ldots\) is used for each parameter to denote that it is conditional on all other parameters):
 
 \setlength{\parindent}{0pt}
 
-$\alpha_i \mid \ldots, \mathbf Y \sim \mbox{Normal}(v_ic_i, v_i)$, with
-$$v_i = \left[ \dfrac{\sum_j K_{ij}}{\sigma^2} + \dfrac{1}{\eta^2}\right]^{-1}\quad \text{and} \quad c_i = \left[\dfrac{\sum_j \sum_k (y_{ijk} - x_j \theta_{1i}^{z_{1i}}\theta_{2i}^{z_{2i}}\theta_{3i}^{z_{3i}} )}{\sigma^2} + \dfrac{\mu}{\eta^2}\right];$$
+\(\alpha_i \mid \ldots, \mathbf Y \sim \mbox{Normal}(v_ic_i, v_i)\), with
+\[v_i = \left( \dfrac{\sum_j K_{ij}}{\sigma^2} + \dfrac{1}{\eta^2}\right)^{-1}\quad \text{and} \quad c_i = \dfrac{\sum_j \sum_k (y_{ijk} - x_j \theta_{1i}^{z_{1i}}\theta_{2i}^{z_{2i}}\theta_{3i}^{z_{3i}} )}{\sigma^2} + \dfrac{\mu}{\eta^2};\]
 
-$\theta_{1i} \mid \ldots,  \mathbf Y \sim \mbox{Normal}^+(v_ic_i, v_i)$, with
-$$v_i = \left[z_{1i} \left( \dfrac{\sum_j K_{ij}}{4 \sigma^2} \right) + \dfrac{1}{\delta_1^2}\right]^{-1}\quad \text{and} \quad c_i = \left[ z_{1i} \left( \dfrac{\sum_j \sum_k(y_{ijk} - \alpha_i)/x_j}{4\sigma^2} \right) + \dfrac{\nu_1}{\delta_1^2}\right];$$
+\(\theta_{1i} \mid \ldots,  \mathbf Y \sim \mbox{Normal}^+(v_ic_i, v_i)\), with
+\[v_i = \left[z_{1i} \left( \dfrac{\sum_j K_{ij}}{4 \sigma^2} \right) + \dfrac{1}{\delta_1^2}\right]^{-1}\quad \text{and} \quad c_i = z_{1i} \left( \dfrac{\sum_j \sum_k(y_{ijk} - \alpha_i)/x_j}{4\sigma^2} \right) + \dfrac{\nu_1}{\delta_1^2};\]
 
-$\theta_{2i} \mid \ldots, \mathbf Y \sim \mbox{Normal}^-(v_ic_i, v_i)$, with
-$$v_i = \left[z_{2i} \left( \dfrac{\sum_j K_{ij}}{4 \sigma^2} \right) + \dfrac{1}{\delta_2^2}\right]^{-1}\quad \text{and} \quad c_i = \left[z_{2i} \left( \dfrac{\sum_j \sum_k(y_{ijk} - \alpha_i)/x_j}{4\sigma^2} \right) + \dfrac{\nu_2}{\delta_2^2}\right];$$
+\(\theta_{2i} \mid \ldots, \mathbf Y \sim \mbox{Normal}^-(v_ic_i, v_i)\), with
+\[v_i = \left[z_{2i} \left( \dfrac{\sum_j K_{ij}}{4 \sigma^2} \right) + \dfrac{1}{\delta_2^2}\right]^{-1}\quad \text{and} \quad c_i = z_{2i} \left( \dfrac{\sum_j \sum_k(y_{ijk} - \alpha_i)/x_j}{4\sigma^2} \right) + \dfrac{\nu_2}{\delta_2^2};\]
 
-$\bfz_i \mid \ldots, \mathbf Y \sim \mbox{Categorical}(\mathbf p_i^*)$, with 
+\(\bfz_i \mid \ldots, \mathbf Y \sim \mbox{Categorical}(\mathbf p_i^*)\), with
 \footnotesize
 \begin{equation*}
 \begin{aligned}
@@ -61,26 +72,26 @@ $\bfz_i \mid \ldots, \mathbf Y \sim \mbox{Categorical}(\mathbf p_i^*)$, with
 \end{equation*}
 \normalsize
 
-$\bfrho \mid \ldots, \mathbf Y \sim \mbox{Dirichlet}(\boldsymbol q^*)$ with 
-$$q_1^* = q_1 + \sum_i z_{1i},\quad q_2^* = q_2 + \sum_i z_{2i}, \quad q_3^* =  q_3 + \sum_i z_{3i};$$
+\(\bfrho \mid \ldots, \mathbf Y \sim \mbox{Dirichlet}(\boldsymbol q^*)\) with
+\[q_1^* = q_1 + \sum_i z_{1i},\quad q_2^* = q_2 + \sum_i z_{2i}, \quad q_3^* =  q_3 + \sum_i z_{3i};\]
 
-$\nu_{1} \mid \ldots, \mathbf Y \sim \mbox{Normal}_+(vc, v)$, with
-$$v = \left[ \dfrac{I}{\delta_1^2} + \dfrac{1}{b_1^2}\right]^{-1}\quad \text{and} \quad c = \left[ \dfrac{\sum_i \theta_{1i}}{\delta_1^2} + \dfrac{a_1}{b_1^2}\right];$$
+\(\nu_{1} \mid \ldots, \mathbf Y \sim \mbox{Normal}_+(vc, v)\), with
+\[v = \left( \dfrac{I}{\delta_1^2} + \dfrac{1}{b_1^2}\right)^{-1}\quad \text{and} \quad c = \dfrac{\sum_i \theta_{1i}}{\delta_1^2} + \dfrac{a_1}{b_1^2};\]
 
-$\delta_1^2 \mid \ldots, \mathbf Y \sim \mbox{Inv-}\chi_{v}^2(c^2)$, with
-$$v = I + 1\quad \text{and} \quad c^2 = \dfrac{\sum_i (\theta_{1i} - \nu_1)^2 + r_1^2}{v};$$
+\(\delta_1^2 \mid \ldots, \mathbf Y \sim \mbox{Inv-}\chi_{v}^2(c^2)\), with
+\[v = I + 1\quad \text{and} \quad c^2 = \dfrac{\sum_i (\theta_{1i} - \nu_1)^2 + r_1^2}{v};\]
 
-$\nu_{2} \mid \ldots, \mathbf Y \sim \mbox{Normal}_-(vc, v)$, with
-$$v = \left[ \dfrac{I}{\delta_2^2} + \dfrac{1}{b_2^2}\right]^{-1}\quad \text{and} \quad c = \left[ \dfrac{\sum_i \theta_{2i}}{\delta_2^2} + \dfrac{a_2}{b_2^2}\right];$$
+\(\nu_{2} \mid \ldots, \mathbf Y \sim \mbox{Normal}_-(vc, v)\), with
+\[v = \left( \dfrac{I}{\delta_2^2} + \dfrac{1}{b_2^2}\right)^{-1}\quad \text{and} \quad c = \dfrac{\sum_i \theta_{2i}}{\delta_2^2} + \dfrac{a_2}{b_2^2};\]
 
-$\delta_2^2 \mid \ldots, \mathbf Y \sim \mbox{Inv-}\chi_{v}^2(c^2)$, with
-$$v = I + 1\quad \text{and} \quad c^2 = \dfrac{\sum_i (\theta_{2i} - \nu_2)^2 + r_2^2}{v};$$
+\(\delta_2^2 \mid \ldots, \mathbf Y \sim \mbox{Inv-}\chi_{v}^2(c^2)\), with
+\[v = I + 1\quad \text{and} \quad c^2 = \dfrac{\sum_i (\theta_{2i} - \nu_2)^2 + r_2^2}{v};\]
 
-$\mu \mid \ldots, \mathbf Y \sim \mbox{Normal}(vc, v)$, with
-$$v = \left[ \dfrac{I}{\eta^2} + \dfrac{1}{b_\mu^2}\right]^{-1}\quad \text{and} \quad c = \left[ \dfrac{\sum_i \alpha_i}{\eta^2} + \dfrac{a_\mu}{b_\mu^2}\right];$$
+\(\mu \mid \ldots, \mathbf Y \sim \mbox{Normal}(vc, v)\), with
+\[v = \left( \dfrac{I}{\eta^2} + \dfrac{1}{b_\mu^2}\right)^{-1}\quad \text{and} \quad c = \dfrac{\sum_i \alpha_i}{\eta^2} + \dfrac{a_\mu}{b_\mu^2};\]
 
-$\eta^2 \mid \ldots, \mathbf Y \sim \mbox{Inv-}\chi_{v}^2(c^2)$, with
-$$v = I + 1\quad \text{and} \quad c^2 = \dfrac{\sum_i (\alpha_{i} - \mu)^2 + r_\eta^2}{v};$$
+\(\eta^2 \mid \ldots, \mathbf Y \sim \mbox{Inv-}\chi_{v}^2(c^2)\), with
+\[v = I + 1\quad \text{and} \quad c^2 = \dfrac{\sum_i (\alpha_{i} - \mu)^2 + r_\eta^2}{v};\]
 
-$\sigma^2 \mid \ldots, \mathbf Y \sim \mbox{Inv-}\chi_{v}^2(c^2)$, with
-$$v = \sum_i \sum_j K_{ij} + 1\quad \text{and} \quad c^2 = \dfrac{\sum_i \sum_j \sum_k (y_{ijk} - \alpha_i - x_j \theta_{1i}^{z_{1i}} \theta_{2i}^{z_{2i}} \theta_{3i}^{z_{3i}} )^2 + r_\sigma^2}{v}.$$
+\(\sigma^2 \mid \ldots, \mathbf Y \sim \mbox{Inv-}\chi_{v}^2(c^2)\), with
+\[v = \sum_i \sum_j K_{ij} + 1\quad \text{and} \quad c^2 = \dfrac{\sum_i \sum_j \sum_k (y_{ijk} - \alpha_i - x_j \theta_{1i}^{z_{1i}} \theta_{2i}^{z_{2i}} \theta_{3i}^{z_{3i}} )^2 + r_\sigma^2}{v}.\]
